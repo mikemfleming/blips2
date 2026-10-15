@@ -30,12 +30,11 @@ without server rewrite rules. Existing `/about` bookmarks should use `#/about`.
 
 1. In the repository's **Settings → Pages → Build and deployment**, select
    **GitHub Actions** as the source.
-2. Push to `master`, or run **Deploy to GitHub Pages** from the Actions tab.
+2. Push to `master`, or run **Deploy to GitHub Pages** from the Actions tab with the `master` branch selected.
 
 The workflow installs locked dependencies, builds the app, and publishes `dist/`
 using the official Pages actions. If you rename the default branch, update the
-workflow's `push.branches` value to match. Manual deployment must also run on the
-default branch.
+workflow's `push.branches` value and deploy job branch condition to match.
 
 See [GitHub's custom Pages workflow documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages).
 
