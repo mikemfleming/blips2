@@ -2,33 +2,39 @@ import React from 'react';
 import { connect } from 'react-redux';
 
 import GridComponent from '../components/Grid';
-import Row from '../components/Row';
-import { Box } from '../styles';
-import {EXIT_CREATE_MODE, TOGGLE_CELL, TOGGLE_CREATE_MODE} from "../constants";
+import { PAINT_CELLS, SELECT_ORGANISM, TOGGLE_CELL } from '../constants';
 
-const Grid = ({ grid, currentColumn, playing, createMode, toggleCell, toggleCreateMode, exitCreateMode }) => (
+const Grid = ({ grid, history, compositionHex, compositionLoadError, notes, currentColumn, playing, selectedOrganism, selectOrganism, toggleCell, paintCells }) => (
   <GridComponent
     grid={grid}
+    history={history}
+    compositionHex={compositionHex}
+    compositionLoadError={compositionLoadError}
+    notes={notes}
     currentColumn={currentColumn}
     playing={playing}
-    createMode={createMode}
+    selectedOrganism={selectedOrganism}
+    selectOrganism={selectOrganism}
     toggleCell={toggleCell}
-    toggleCreateMode={toggleCreateMode}
-    exitCreateMode={exitCreateMode}
+    paintCells={paintCells}
   />
 );
 
 const mapStateToProps = state => ({
   grid: state.grid,
+  history: state.history,
+  compositionHex: state.compositionHex,
+  compositionLoadError: state.compositionLoadError,
+  notes: state.musicBox.keys[state.musicBox.currentKey],
   currentColumn: state.currentColumn,
   playing: Boolean(state.interval),
-  createMode: state.createMode,
+  selectedOrganism: state.selectedOrganism,
 });
 
 const mapDispatchToProps = dispatch => ({
-  toggleCell: (x, y) => () => dispatch({ type: TOGGLE_CELL, x, y }),
-  toggleCreateMode: () => dispatch({ type: TOGGLE_CREATE_MODE }),
-  exitCreateMode: () => dispatch({ type: EXIT_CREATE_MODE }),
+  toggleCell: (x, y, value) => () => dispatch({ type: TOGGLE_CELL, x, y, value }),
+  selectOrganism: id => dispatch({ type: SELECT_ORGANISM, id }),
+  paintCells: cells => dispatch({ type: PAINT_CELLS, cells }),
 });
 
 export default connect(

@@ -7,23 +7,33 @@ import { HashRouter, Route } from 'react-router-dom';
 
 import { AppContainer } from './styles';
 import App from './components/App';
-import About from './components/About';
 import reducer from './reducers';
+import { loadCompositionFromSearch } from './composition/url';
+
+const initialState = loadCompositionFromSearch(reducer(undefined, {}), window.location.search);
 
 let store;
 if (process.env.NODE_ENV === 'production') {
-  store = createStore(reducer);
+  store = createStore(reducer, initialState);
 } else {
-  const middleware = applyMiddleware(createLogger());
-  store = createStore(reducer, middleware);
+  const middleware = applyMiddleware(createLogger({
+    collapsed: true,
+    stateTransformer: state => ({
+      dimensions: state.dimensions,
+      currentColumn: state.currentColumn,
+      playing: Boolean(state.interval),
+      historyLayers: state.history.length,
+      musicBox: state.musicBox,
+    }),
+  }));
+  store = createStore(reducer, initialState, middleware);
 }
 
 ReactDOM.render(
   <Provider store={store} >
     <HashRouter>
       <AppContainer>
-        <Route path="/" exact component={App} />
-        <Route path="/about" component={About} />
+        <Route path="/" component={App} />
       </AppContainer>
     </HashRouter>
   </Provider>,
