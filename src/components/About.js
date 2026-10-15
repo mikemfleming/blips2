@@ -51,8 +51,10 @@ class About extends React.Component {
           <em>Blips of Life 2</em> is a browser-based experiment in cellular automata,
           generative music, and spatial memory, built on{' '}
           <a className="link dim blue near-black" target="_blank" rel="noopener noreferrer" href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life">Conway&apos;s Game of Life</a>.
-          The <a className="link dim blue near-black" target="_blank" rel="noopener noreferrer" href="https://mikemfleming.github.io/blips/#/">original Blips</a> mapped a two-dimensional cellular state onto a pentatonic
-          sequencer. This version makes the evolution itself a persistent visual object.
+          The <a className="link dim blue near-black" target="_blank" rel="noopener noreferrer" href="https://mikemfleming.github.io/blips/#/">original Blips</a> was made in 2018 without AI and mapped a two-dimensional
+          cellular state onto a pentatonic sequencer. This version makes the evolution
+          itself a persistent visual object, and is partly an experiment in what is
+          possible when building software with AI.
         </p>
         <p>
           The grid expands from 16 × 16 to 32 × 32, with time steps on x,
@@ -67,18 +69,40 @@ class About extends React.Component {
           individual SVG faces with a shared cube mesh and per-instance coordinates.
           History stays in GPU buffers, with new layers appended as needed;
           playback highlighting uses shader uniforms without rebuilding geometry.
-          Pointer rays intersect the editable plane for picking, and drawing updates
-          are batched once per animation frame.
+          Pointer rays identify cells in the 3D workspace, and drawing updates
+          are batched once per animation frame. Organisms can be stamped into the
+          current generation with quarter-turn rotation, including live rotation
+          of the placement preview while dragging.
         </p>
         <p>
-          A composition&apos;s seed is its initial grid and major/minor key, captured
-          on first playback. The grid occupies 1,024 bits; the key adds one bit of
-          information, stored in a final byte for a 129-byte payload. Sharing uses
-          raw DEFLATE when it reduces size, otherwise uncompressed bytes, followed
+          New compositions start at 120 BPM with spatial audio enabled. Four
+          sequencer steps per beat connect the horizontal scan to musical time,
+          while spatial positioning moves the sound across the stereo field.
+          A 50 ms feedback echo adds a short trail; optional tempo-synced ping-pong
+          delay, a population-density-driven low-pass filter, and chorus/phaser
+          modulation add further movement. Processors are created when enabled
+          and disposed when bypassed.
+        </p>
+        <p>
+          A composition&apos;s seed preserves its initial grid and major/minor key,
+          captured on first playback, alongside the tempo and effects selected
+          when sharing. The grid occupies 1,024 bits, packed into 128 bytes;
+          the key uses one byte, with tempo and effect flags extending the format
+          to at most 131 bytes before compression. Older seeds retain their original
+          75 BPM tempo and effects settings. Sharing uses raw DEFLATE when it
+          reduces size, otherwise uncompressed bytes, followed
           by Base64url encoding and a format prefix. The query parameter contains
           the complete starting state, so links reconstruct compositions without
           a database or server-side lookup. Life&apos;s deterministic rules reproduce
           the same evolution from that starting state, provided it is left unmodified.
+        </p>
+        <p>
+          Five template seeds explore different behaviors: a still-life garden,
+          a period-three pulsar, traveling gliders, the R-pentomino, and Acorn.
+          Each is a complete composition link with its own key, tempo, and effects.
+          Evolution runs on a wrapping 32 × 32 board, so patterns can cross an edge
+          and return from the opposite side; expanding patterns eventually interact
+          with their own returning activity.
         </p>
           </div>
         </AboutPanel>

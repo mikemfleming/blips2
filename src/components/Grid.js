@@ -37,13 +37,24 @@ class GridComponent extends React.Component {
     if (this.props.playing && !previous.playing) {
       this.pending.clear();
       this.gesture = null;
+      this.canvas.classList.remove('editable', 'dragging');
     }
     if (previous.grid !== this.props.grid || previous.history !== this.props.history) {
       if (this.props.currentColumn === -1 && previous.history !== this.props.history) this.pending.clear();
       if (this.renderer) this.renderer.update(this.props.grid, this.props.history);
     }
-    if (previous.selectedOrganism !== this.props.selectedOrganism) {
+    if (previous.selectedOrganism !== this.props.selectedOrganism || previous.organismRotation !== this.props.organismRotation) {
       this.preview = this.props.selectedOrganism ? this.previewAt(this.selected) : [];
+    }
+    if (this.props.organismDrag && previous.organismDrag !== this.props.organismDrag) {
+      const pointer = this.props.organismDrag;
+      const hit = this.canvas.ownerDocument.elementFromPoint(pointer.x, pointer.y);
+      this.selected = hit === this.canvas ? this.cellAt(pointer.x, pointer.y) : null;
+      this.preview = this.previewAt(this.selected);
+      if (pointer.drop) {
+        if (this.selected) this.placeOrganism(this.selected);
+        else this.props.selectOrganism(null);
+      }
     }
     this.schedule();
   }
@@ -106,12 +117,12 @@ class GridComponent extends React.Component {
   }
 
   previewAt(cell) {
-    return organismAt(this.props.selectedOrganism, cell, this.props.grid.length, this.props.grid[0].length);
+    return organismAt(this.props.selectedOrganism, cell, this.props.grid.length, this.props.grid[0].length, this.props.organismRotation);
   }
 
   placeOrganism(cell, id = this.props.selectedOrganism) {
     if (this.props.playing || !cell) return;
-    const cells = organismAt(id, cell, this.props.grid.length, this.props.grid[0].length);
+    const cells = organismAt(id, cell, this.props.grid.length, this.props.grid[0].length, this.props.organismRotation);
     if (!cells.length) return;
     this.props.paintCells(cells);
     this.props.selectOrganism(null);
@@ -138,6 +149,8 @@ class GridComponent extends React.Component {
 
   dragLeave() {
     this.preview = [];
+    this.selected = null;
+    this.canvas.classList.remove('editable');
     this.schedule();
   }
 
@@ -157,6 +170,7 @@ class GridComponent extends React.Component {
       return;
     }
     const cell = this.props.playing ? null : this.cellAt(event.clientX,event.clientY);
+    this.canvas.classList.toggle('editable', Boolean(cell));
     this.gesture = { x:event.clientX, y:event.clientY, lastX:event.clientX, lastY:event.clientY,
       yaw:this.view.yaw, pitch:this.view.pitch, pointerId:event.pointerId,
       cell, moved:false, visited:new Set() };
@@ -168,6 +182,7 @@ class GridComponent extends React.Component {
     const gesture = this.gesture;
     if (!gesture) {
       this.selected = this.props.playing ? null : this.cellAt(event.clientX,event.clientY);
+      this.canvas.classList.toggle('editable', Boolean(this.selected));
       this.preview = this.props.selectedOrganism ? this.previewAt(this.selected) : [];
       this.schedule();
       return;
@@ -201,6 +216,8 @@ class GridComponent extends React.Component {
     }
     this.gesture=null;
     this.canvas.classList.remove('dragging');
+    this.selected = this.props.playing ? null : this.cellAt(event.clientX,event.clientY);
+    this.canvas.classList.toggle('editable', Boolean(this.selected));
     this.schedule();
   }
 
@@ -231,7 +248,7 @@ class GridComponent extends React.Component {
     return (
       <Sculpture>
         <div className="sculpture-caption">
-          <span>{this.props.selectedOrganism ? 'Place organism on the grid · Escape to cancel' : 'Drag squares to draw · Drag background to rotate · Scroll to zoom'}</span>
+          <span>{this.props.selectedOrganism ? 'Place organism · R / Shift+R to rotate · Escape to cancel' : 'Drag squares to draw · Drag background to rotate · Scroll to zoom'}</span>
           <span className="iteration">Iteration {this.props.history.length+1}</span>
         </div>
         {this.state.error || this.props.compositionLoadError ? (

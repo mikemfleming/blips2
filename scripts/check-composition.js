@@ -3,8 +3,10 @@ const vm = require('vm');
 const babel = require('babel-core');
 const zlib = require('zlib');
 const exportsForUrl = {};
+const constants = {};
+vm.runInNewContext(babel.transformFileSync('src/constants/index.js',{presets:['env']}).code,{exports:constants});
 vm.runInNewContext(babel.transformFileSync('src/composition/url.js', { presets: ['env','stage-3'] }).code, {
-  exports: exportsForUrl, require, atob, btoa, URLSearchParams,
+  exports: exportsForUrl, require:name=>name==='../constants'?constants:require(name), atob, btoa, URLSearchParams,
 });
 const { encodeCompositionCode, decodeCompositionCode, loadCompositionFromSearch } = exportsForUrl;
 const sample = 'dY2CgBDQwMDA4MDAwHiDbBEYA';
@@ -28,7 +30,7 @@ const random = Array.from({length:32},()=>Array.from({length:32},()=>{
   return seed >>> 31;
 }));
 [empty, full, random].forEach(pattern => equalGrid(decodeCompositionCode(encodeCompositionCode(pattern,0)).grid,pattern));
-assert.equal(encodeCompositionCode(random,0)[0],'r','Incompressible patterns use raw fallback');
+assert.equal(encodeCompositionCode(random,0)[0],'R','Incompressible patterns use raw fallback with explicit default tempo');
 const raw = new Uint8Array(129);
 raw[128] = 1;
 const rawCode = 'r' + Buffer.from(raw).toString('base64url');
@@ -82,12 +84,17 @@ assert(!sharing.isPlaybackShortcut({code:'Space',target:{closest:()=>({})}}),'Mo
 assert(!sharing.isPlaybackShortcut({code:'Space',ctrlKey:true,target:{}}));
 console.log('Passed: share URLs preserve initial grid/key, replace old seeds, and keyboard shortcut respects text inputs.');
 const controlsExports={};
+let dispatchBindings;
+const timers=[];
+const canceledTimers=[];
 const listeners=[];
 const visibilityDocument={hidden:false,addEventListener:(...args)=>listeners.push(args),removeEventListener:(...args)=>listeners.push(args)};
 vm.runInNewContext(babel.transformFileSync('src/containers/Controls.js',{presets:['env','react','stage-3']}).code,{
   exports:controlsExports, clearTimeout, setTimeout, document:visibilityDocument,
+  clearInterval:id=>canceledTimers.push(id),
+  setInterval:(callback,delay)=>{timers.push({callback,delay});return timers.length;},
   window:{addEventListener:(...args)=>listeners.push(args),removeEventListener:(...args)=>listeners.push(args)},
-  require:name=>({react:require('react'),'react-redux':{connect:()=>component=>component},'../constants':{},'../components/Controls':()=>null,'../composition/share':sharing}[name]),
+  require:name=>({react:require('react'),'react-redux':{connect:(mapState,mapDispatch)=>component=>{dispatchBindings=mapDispatch;return component;}},'../constants':constants,'../components/Controls':()=>null,'../composition/share':sharing}[name]),
 });
 let starts=0; let stops=0; let prevented=0;
 const controls=new controlsExports.default({playing:false,start:()=>starts++,stop:()=>stops++});
@@ -112,3 +119,83 @@ assert.strictEqual(keyListeners[0][1],keyListeners[1][1]);
 for(const name of ['blur','pagehide','visibilitychange'])assert.equal(listeners.filter(listener=>listener[0]===name).length,2);
 console.log('Passed: pause on focus loss, hidden page, explainer navigation, and unmount; listener cleanup.');
 console.log('Passed: Space play/pause, held-key repeat protection, shortcut cleanup.');
+for(const bpm of [30,60,75,90,120,150,240]) {
+  const code=encodeCompositionCode(grid,1,bpm);
+  const decoded=decodeCompositionCode(code);
+  equalGrid(decoded.grid,grid); assert.equal(decoded.key,1); assert.equal(decoded.bpm,bpm);
+  const startup=loadCompositionFromSearch(baseState,'?c='+code);
+  assert.equal(startup.musicBox.bpm,bpm);
+}
+assert.equal(decodeCompositionCode(sample).bpm,75,'Legacy links must retain the original tempo');
+for(const bpm of [0,29,241,NaN,75.5])assert.throws(()=>encodeCompositionCode(grid,1,bpm));
+const invalidTempo=Buffer.alloc(130); invalidTempo[129]=0;
+assert.throws(()=>decodeCompositionCode('D'+zlib.deflateRawSync(invalidTempo).toString('base64url')));
+assert.throws(()=>decodeCompositionCode('D'+zlib.deflateRawSync(Buffer.alloc(129)).toString('base64url')));
+const tempoRaw=encodeCompositionCode(random,1,120);
+assert.equal(tempoRaw[0],'R'); assert.equal(decodeCompositionCode(tempoRaw).bpm,120);
+const sharedTempo=new URL(sharing.createShareUrl({...evolvedState,musicBox:{currentKey:0,bpm:120}},'https://example.com/'));
+assert.equal(decodeCompositionCode(sharedTempo.searchParams.get('c')).bpm,120);
+let restart;
+controls.props={...controls.props,playing:true,bpm:120,interval:123,suspended:false,start:(...args)=>{restart=args;}};
+controls.componentDidUpdate({bpm:75,suspended:false});
+assert.deepStrictEqual(restart,[120,123],'Live tempo changes must replace the previous playback timer');
+console.log('Passed: BPM seed compatibility, compressed/raw round trips, validation, sharing, and live timer restart.');
+
+const dispatched=[];
+const playback=dispatchBindings(action=>dispatched.push(action));
+playback.start(120,44);
+assert.equal(canceledTimers[canceledTimers.length-1],44);
+assert.equal(timers[timers.length-1].delay,125,'120 BPM means 125ms per sixteenth-note step');
+assert.equal(dispatched[0].type,constants.START_GAME);
+timers[timers.length-1].callback();
+assert.equal(dispatched[1].type,constants.STEP_GRID);
+playback.setBpm(180); assert.equal(dispatched[2].bpm,180);
+console.log('Passed: tempo dispatch uses the correct timer period and clears the old timer.');
+for(let effects=0;effects<=15;effects++) {
+  const code=encodeCompositionCode(grid,1,120,effects);
+  const decoded=decodeCompositionCode(code);
+  equalGrid(decoded.grid,grid); assert.equal(decoded.key,1); assert.equal(decoded.bpm,120); assert.equal(decoded.effects,effects);
+  assert.equal(loadCompositionFromSearch(baseState,'?c='+code).musicBox.effects,effects);
+}
+assert.equal(decodeCompositionCode(sample).effects,0);
+assert.equal(decodeCompositionCode(tempoRaw).effects,0);
+const effectsRaw=encodeCompositionCode(random,1,75,15);
+assert.equal(effectsRaw[0],'u'); assert.equal(decodeCompositionCode(effectsRaw).effects,15);
+for(const effects of [-1,16,1.5])assert.throws(()=>encodeCompositionCode(grid,1,75,effects));
+const badEffects=Buffer.alloc(131); badEffects[129]=75; badEffects[130]=16;
+assert.throws(()=>decodeCompositionCode('e'+zlib.deflateRawSync(badEffects).toString('base64url')));
+const effectLink=new URL(sharing.createShareUrl({...evolvedState,musicBox:{currentKey:0,bpm:90,effects:15}},'https://example.com/'));
+const effectSeed=decodeCompositionCode(effectLink.searchParams.get('c'));
+assert.equal(effectSeed.effects,15); assert.equal(effectSeed.bpm,90); equalGrid(effectSeed.grid,grid);
+console.log('Passed: all effect masks round-trip, legacy seeds bypass effects, invalid flags rejected, sharing preserves effects.');
+
+// Template links preserve their settings and the Pages hosting path.
+const templateExports = {};
+vm.runInNewContext(babel.transformFileSync('src/templates/index.js', { presets: ['env', 'stage-3'] }).code, {
+  exports: templateExports, require: () => exportsForUrl,
+});
+const { TEMPLATES, templateHref } = templateExports;
+assert.equal(TEMPLATES.length, 5);
+assert.equal(new Set(TEMPLATES.map(template => template.code)).size, 5);
+const expectedCounts = [15, 48, 15, 5, 7];
+const templateGrids = TEMPLATES.map((template, index) => {
+  const link = new URL(templateHref(template), 'https://mikemfleming.github.io/blips2/?c=old#/about');
+  assert.equal(link.pathname, '/blips2/');
+  assert.equal(link.hash, '#/');
+  const decoded = decodeCompositionCode(link.searchParams.get('c'));
+  assert.equal(decoded.key, template.key);
+  assert.equal(decoded.bpm, template.bpm);
+  assert.equal(decoded.effects, template.effects);
+  assert.equal(decoded.grid.reduce((sum, row) => sum + row.reduce((a, b) => a + b, 0), 0), expectedCounts[index]);
+  assert.equal(loadCompositionFromSearch(baseState, link.search).compositionLoadError, null);
+  return decoded.grid;
+});
+const life = require('../src/game');
+const stepTemplate = grid => life.generateNewGrid(grid, { rows: 32, columns: 32 });
+equalGrid(stepTemplate(templateGrids[0]), templateGrids[0]);
+equalGrid(stepTemplate(stepTemplate(stepTemplate(templateGrids[1]))), templateGrids[1]);
+assert.notEqual(JSON.stringify(stepTemplate(templateGrids[1])), JSON.stringify(templateGrids[1]));
+let movedGliders = templateGrids[2];
+for (let generation = 0; generation < 4; generation += 1) movedGliders = stepTemplate(movedGliders);
+equalGrid(movedGliders, templateGrids[2].map((row, y, grid) => row.map((cell, x) => grid[(y + 31) % 32][(x + 31) % 32])));
+console.log('Five template seeds, settings, hosting paths and Conway behaviors passed.');

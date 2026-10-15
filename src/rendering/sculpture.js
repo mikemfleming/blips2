@@ -1,4 +1,4 @@
-export const INITIAL_VIEW = { yaw: Math.PI / 4, pitch: .65, zoom: 1 };
+export const INITIAL_VIEW = { yaw: Math.PI / 4, pitch: .65, zoom: 2 };
 export const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 export const cameraFor = (rows, columns, height, view) => ({

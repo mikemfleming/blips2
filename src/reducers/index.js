@@ -5,11 +5,19 @@ import {
   TOGGLE_CELL,
   PAINT_CELLS,
   SELECT_ORGANISM,
+  ROTATE_ORGANISM,
+  DRAG_ORGANISM,
   TOGGLE_KEY,
   TOGGLE_CREATE_MODE,
   EXIT_CREATE_MODE,
   RESET,
   TOGGLE_MUTE,
+  SET_BPM,
+  TOGGLE_EFFECT,
+  EFFECT_FLAGS,
+  DEFAULT_BPM,
+  MIN_BPM,
+  MAX_BPM,
   INITIAL_DIMENSIONS,
   MAJOR_PENTATONIC,
   MINOR_PENTATONIC,
@@ -18,12 +26,9 @@ import {
 // initial state for synth
 import StartAudioContext from 'startaudiocontext';
 import Tone from 'tone';
-const synth = new Tone.PolySynth(16, Tone.Synth);
-const echo = new Tone.FeedbackDelay(0.05, 0.3);
-echo.wet.value = 0.25;
-const volume = new Tone.Volume(-16);
-synth.chain(echo, volume, Tone.Master);
-volume.mute = false;
+import { createAudio } from '../audio';
+const audio = createAudio(Tone);
+const { synth, volume } = audio;
 StartAudioContext(synth.context, '#root')
   .then(() => console.log('INITIALIZED WEB AUDIO API'))
   .catch(() => console.log('FAILED TO INITIALIZE WEB AUDIO API'));
@@ -43,20 +48,44 @@ const initialState = {
   musicBox: {
     keys: [MAJOR_PENTATONIC, MINOR_PENTATONIC],
     currentKey: 0,
+    bpm: DEFAULT_BPM,
+    effects: EFFECT_FLAGS.spatial,
     mute: false,
   },
+  organismDrag: null,
+  organismRotation: 0,
   selectedOrganism: null,
   createMode: false,
 };
 
 const reducer = (state = initialState, action) => {
   switch (action.type) {
+    case TOGGLE_EFFECT: {
+      const bit = EFFECT_FLAGS[action.effect];
+      if (!bit) return state;
+      const musicBox = { ...state.musicBox, effects: (state.musicBox.effects || 0) ^ bit };
+      audio.configure(musicBox, state.grid, state.currentColumn);
+      return { ...state, musicBox };
+    }
+    case SET_BPM:
+      if (!Number.isInteger(action.bpm) || action.bpm < MIN_BPM || action.bpm > MAX_BPM || action.bpm === state.musicBox.bpm) return state;
+      audio.configure({ ...state.musicBox, bpm: action.bpm }, state.grid, state.currentColumn);
+      return { ...state, musicBox: { ...state.musicBox, bpm: action.bpm } };
+    case DRAG_ORGANISM:
+      if (state.interval || !state.selectedOrganism || !action.position
+        || !Number.isFinite(action.position.x) || !Number.isFinite(action.position.y)) return state;
+      return { ...state, organismDrag: { x: action.position.x, y: action.position.y, drop: Boolean(action.position.drop) } };
+    case ROTATE_ORGANISM:
+      if (state.interval || (action.direction !== 1 && action.direction !== -1)) return state;
+      return { ...state, organismRotation: (state.organismRotation + action.direction + 4) % 4 };
     case SELECT_ORGANISM:
-      return { ...state, selectedOrganism: state.interval ? null : action.id };
+      return { ...state, selectedOrganism: state.interval ? null : action.id, organismDrag: null };
     case START_GAME:
+      audio.configure(state.musicBox, state.grid, state.currentColumn);
       return {
         ...state,
         selectedOrganism: null,
+        organismDrag: null,
         interval: action.interval,
         compositionHex: state.compositionHex || encodeComposition(state.grid, state.musicBox.currentKey),
       };
@@ -106,7 +135,8 @@ const reducer = (state = initialState, action) => {
       }).filter(blip => blip.active)
       .map(blip => blip.note);
 
-      synth.triggerAttackRelease(notes, 0.2);
+      audio.configure(state.musicBox, nextGrid, nextColumn);
+      synth.triggerAttackRelease(notes, Math.min(0.2, 15 / state.musicBox.bpm));
       
       return {
         ...state,
@@ -143,6 +173,7 @@ const reducer = (state = initialState, action) => {
         grid: Game.createGrid(INITIAL_DIMENSIONS, MAJOR_PENTATONIC),
         history: [],
         selectedOrganism: null,
+        organismDrag: null,
         compositionHex: null,
         compositionLoadError: null,
         currentColumn: -1,

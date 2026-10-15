@@ -14,8 +14,21 @@ export const ORGANISMS = [
   pattern('beehive', 'Beehive', 'Still life', ['.OO.','O..O','.OO.']),
 ];
 
-export const organismAt = (id, anchor, rows, columns) => {
-  const organism = ORGANISMS.find(item => item.id === id);
+export const rotateOrganism = (organism, turns = 0) => {
+  let rotated = { ...organism, cells: organism.cells.map(cell => ({ ...cell })) };
+  const count = ((turns % 4) + 4) % 4;
+  for (let turn = 0; turn < count; turn += 1) {
+    rotated = {
+      ...rotated, width: rotated.height, height: rotated.width,
+      cells: rotated.cells.map(cell => ({ x: rotated.height - 1 - cell.y, y: cell.x })),
+    };
+  }
+  return rotated;
+};
+
+export const organismAt = (id, anchor, rows, columns, turns = 0) => {
+  const original = ORGANISMS.find(item => item.id === id);
+  const organism = original ? rotateOrganism(original, turns) : null;
   if (!organism || !anchor || organism.width > columns || organism.height > rows) return [];
   const x = Math.max(0, Math.min(columns - organism.width, anchor.x - Math.floor(organism.width / 2)));
   const y = Math.max(0, Math.min(rows - organism.height, anchor.y - Math.floor(organism.height / 2)));

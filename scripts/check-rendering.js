@@ -62,11 +62,23 @@ const appended=uploads.slice(beforeAppend).find(item=>item[0]==='upload' && item
 assert(appended,'History append should upload only the new layer when capacity allows');
 renderer.update(grid,[]); assert.equal(renderer.past.count,0);
 let chain;
-class Synth {chain(...args){chain=args;} triggerAttackRelease(){}}
-class Delay {constructor(){this.wet={};}}
+const audioModule=load('src/audio/index.js');
+const audioNodes=[];
+class Signal {
+  constructor(value=0){this.value=value;}
+  rampTo(value){this.value=value;}
+}
+class AudioNode {
+  constructor(options={}){this.options=options;this.wet=new Signal();this.frequency=new Signal();this.delayTime=new Signal();audioNodes.push(this);}
+  chain(...args){chain=args;} connect(){} disconnect(){} dispose(){this.disposed=true;}
+  setPosition(...position){this.position=position;}
+}
+class Synth extends AudioNode {triggerAttackRelease(){}}
+class Delay extends AudioNode {}
+const fakeTone={PolySynth:Synth,FeedbackDelay:Delay,Volume:AudioNode,Synth,Master:{},Panner3D:AudioNode,Filter:AudioNode,Chorus:AudioNode,Phaser:AudioNode,PingPongDelay:AudioNode};
 const reducer=load('src/reducers/index.js', {
-  '../constants':constants, '../game':require('../src/game'), '../composition':composition,
-  tone:{PolySynth:Synth,FeedbackDelay:Delay,Volume:class{},Synth,Master:{}},
+  '../constants':constants, '../game':require('../src/game'), '../composition':composition, '../audio':audioModule,
+  tone:fakeTone,
   startaudiocontext:()=>Promise.resolve(),
 }, {clearInterval:()=>null}).default;
 const initial=reducer(undefined,{});
@@ -161,7 +173,115 @@ const across=.5*Math.cos(yaw)-.5*Math.sin(yaw);
 const forward=.5*Math.sin(yaw)+.5*Math.cos(yaw);
 const vertical=forward*Math.sin(pitch)+.5*Math.cos(pitch);
 const depth=forward*Math.cos(pitch)-.5*Math.sin(pitch);
-const scale=.36*600/baseCamera.radius*(baseCamera.radius*3)/(baseCamera.radius*3-depth);
+const scale=.36*600*zoom/baseCamera.radius*(baseCamera.radius*3)/(baseCamera.radius*3-depth);
 const baseCell=rendering.pickCell(400+across*scale,300+vertical*scale,rect,32,32,1,rendering.INITIAL_VIEW,0);
 assert.equal(baseCell.x,16); assert.equal(baseCell.y,16);
 console.log('Passed: picking aligns with the grid beneath the current cubes.');
+assert.equal(initial.musicBox.bpm,120,'New compositions default to 120 BPM');
+assert.equal(initial.musicBox.effects,constants.EFFECT_FLAGS.spatial,'New compositions enable spatial audio');
+const faster=reducer(initial,{type:constants.SET_BPM,bpm:150});
+assert.equal(faster.musicBox.bpm,150);
+assert.strictEqual(faster.grid,initial.grid);
+for(const bpm of [0,29,241,75.5])assert.strictEqual(reducer(faster,{type:constants.SET_BPM,bpm}),faster);
+assert.strictEqual(reducer(faster,{type:constants.SET_BPM,bpm:150}),faster);
+console.log('Passed: tempo updates preserve the grid and reject invalid BPM values.');
+let toggled=initial;
+for(const effect of ['spatial','pingPong','evolving','modulation'])toggled=reducer(toggled,{type:constants.TOGGLE_EFFECT,effect});
+assert.equal(toggled.musicBox.effects,14);
+assert.strictEqual(toggled.grid,initial.grid);
+assert.strictEqual(reducer(toggled,{type:constants.TOGGLE_EFFECT,effect:'unknown'}),toggled);
+for(const effect of ['spatial','pingPong','evolving','modulation'])toggled=reducer(toggled,{type:constants.TOGGLE_EFFECT,effect});
+assert.equal(toggled.musicBox.effects,constants.EFFECT_FLAGS.spatial);
+const effectStart=audioNodes.length;
+const engine=audioModule.createAudio(fakeTone);
+assert.equal(audioNodes.length-effectStart,3,'Default sound must create only synth, echo, and volume');
+engine.configure({bpm:120,effects:15},grid,0);
+const processors=audioNodes.slice(effectStart+3);
+assert.equal(processors.length,5);
+const spatial=processors.find(node=>node.options.panningModel==='HRTF');
+const pingPong=processors.find(node=>node.options.maxDelayTime===2);
+const filter=processors.find(node=>node.options.type==='lowpass');
+assert.equal(spatial.position[0],-2);
+assert.equal(pingPong.delayTime.value,.375);
+const bright=filter.frequency.value;
+engine.configure({bpm:60,effects:15},initial.grid,31);
+assert.equal(spatial.position[0],2);
+assert.equal(pingPong.delayTime.value,.75);
+assert(filter.frequency.value<bright);
+engine.configure({bpm:75,effects:0},initial.grid,0);
+assert(processors.every(node=>node.disposed),'Bypassed processors must be disposed');
+console.log('Passed: effect toggles, lazy graph creation, spatial motion, tempo-synced echoes, density mapping, and bypass cleanup.');
+const blinker=organisms.ORGANISMS.find(item=>item.id==='blinker');
+const upright=organisms.rotateOrganism(blinker,1);
+assert.equal(upright.width,1); assert.equal(upright.height,3);
+assert(upright.cells.every(cell=>cell.x===0));
+organisms.ORGANISMS.forEach(organism=>{
+  assert.equal(JSON.stringify(organisms.rotateOrganism(organism,4)),JSON.stringify(organism));
+  assert.equal(JSON.stringify(organisms.rotateOrganism(organisms.rotateOrganism(organism,1),-1)),JSON.stringify(organism));
+  for(let rotation=0;rotation<4;rotation++) {
+    const cells=organisms.organismAt(organism.id,{x:31,y:31},32,32,rotation);
+    assert.equal(cells.length,organism.cells.length);
+    assert(cells.every(cell=>cell.x>=0&&cell.x<32&&cell.y>=0&&cell.y<32));
+  }
+});
+let orientation=reducer(initial,{type:constants.ROTATE_ORGANISM,direction:-1});
+assert.equal(orientation.organismRotation,3);
+orientation=reducer(orientation,{type:constants.ROTATE_ORGANISM,direction:1});
+assert.equal(orientation.organismRotation,0);
+orientation=reducer(orientation,{type:constants.ROTATE_ORGANISM,direction:1});
+assert.equal(reducer(orientation,{type:constants.SELECT_ORGANISM,id:'glider'}).organismRotation,1);
+assert.equal(reducer(orientation,{type:constants.RESET}).organismRotation,1);
+const rotatingPlacement=new Grid({grid:initial.grid,history:[],playing:false,selectedOrganism:'blinker',organismRotation:1,paintCells:cells=>{placed=cells;},selectOrganism:()=>{}});
+rotatingPlacement.schedule=()=>{};
+const preview=rotatingPlacement.previewAt({x:16,y:16});
+rotatingPlacement.placeOrganism({x:16,y:16});
+assert.equal(JSON.stringify(placed),JSON.stringify(preview));
+assert(placed.every(cell=>cell.x===16));
+console.log('Passed: clockwise/counterclockwise rotation, four-turn identity, rotated edge placement, persistent angle, and preview/drop agreement.');
+const Picker=load('src/components/OrganismPicker.js',{react:React,'../organisms':organisms},{requestAnimationFrame:()=>1,cancelAnimationFrame(){}}).default;
+const turns=[];
+const picker=new Picker({playing:false,selectedOrganism:'glider',rotate:direction=>turns.push(direction)});
+const rotationKey={type:'keydown',key:'r',target:{tagName:'CANVAS'},preventDefault(){}};
+picker.dismiss(rotationKey);
+picker.dismiss({...rotationKey,key:'R',shiftKey:true});
+picker.dismiss({...rotationKey,repeat:true});
+picker.dismiss({...rotationKey,target:{tagName:'INPUT'}});
+picker.dismiss({...rotationKey,ctrlKey:true});
+assert.deepStrictEqual(turns,[1,-1]);
+picker.props={...picker.props,playing:true}; picker.dismiss(rotationKey);
+assert.equal(turns.length,2);
+console.log('Passed: R and Shift+R shortcuts, held-key protection, text-input and playback guards.');
+// A pointer-held organism drag must leave keyboard events available for rotation.
+const pointerUpdates=[]; let selectedId=null; let dragAngle=0;
+const pointerPicker=new Picker({playing:false,selectedOrganism:'blinker',
+  selectOrganism:id=>{selectedId=id;},dragOrganism:position=>pointerUpdates.push(position),
+  rotate:direction=>{dragAngle=(dragAngle+direction+4)%4;}});
+pointerPicker.setState=update=>{pointerPicker.state={...pointerPicker.state,...update};};
+const sourceCard={getAttribute:()=> 'blinker',focus(){}};
+pointerPicker.root={contains:()=>true,setPointerCapture(){},hasPointerCapture:()=>true,releasePointerCapture(){}};
+pointerPicker.beginOrganismDrag({button:0,pointerId:7,clientX:100,clientY:100,target:{closest:()=>sourceCard},preventDefault(){}});
+assert.equal(selectedId,'blinker');
+pointerPicker.movePanel({pointerId:7,clientX:400,clientY:400});
+pointerPicker.flushOrganismDrag();
+assert.equal(pointerUpdates.length,1);
+pointerPicker.dismiss(rotationKey);
+assert.equal(dragAngle,1,'R must rotate while the pointer is still held');
+pointerPicker.dismiss({...rotationKey,key:'R',shiftKey:true});
+assert.equal(dragAngle,0);
+pointerPicker.dismiss(rotationKey);
+pointerPicker.endPanelDrag({type:'pointerup',pointerId:7,clientX:400,clientY:400});
+assert.equal(pointerUpdates[1].drop,true);
+assert.equal(pointerPicker.organismGesture,null);
+assert.equal(pointerPicker.state.open,false);
+const dragState=reducer(reducer(initial,{type:constants.SELECT_ORGANISM,id:'blinker'}),{type:constants.DRAG_ORGANISM,position:{x:400,y:400}});
+assert.equal(dragState.organismDrag.x,400);
+assert.equal(reducer(dragState,{type:constants.SELECT_ORGANISM,id:null}).organismDrag,null);
+console.log('Passed: pointer-held rotation, counterclockwise rotation, drop signaling, and drag-state cleanup.');
+const heldPreview=new Grid({grid:initial.grid,history:[],playing:false,selectedOrganism:'blinker',organismRotation:0});
+heldPreview.selected={x:16,y:16}; heldPreview.schedule=()=>{};
+const beforeTurn=heldPreview.props;
+heldPreview.props={...heldPreview.props,organismRotation:1};
+heldPreview.componentDidUpdate(beforeTurn);
+assert.equal(heldPreview.preview.length,3);
+assert(heldPreview.preview.every(cell=>cell.x===16),'Rotation must update a held preview without another pointer move');
+console.log('Passed: stationary pointer preview updates immediately on rotation.');

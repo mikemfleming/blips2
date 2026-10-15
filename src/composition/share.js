@@ -11,7 +11,7 @@ export const createShareUrl = (state, href) => {
     grid = Array.from({ length: 32 }, (_, y) => Array.from({ length: 32 }, (unused, x) => Number(bits[y * 32 + x])));
   }
   const url = new URL(href);
-  url.searchParams.set('c', encodeCompositionCode(grid, key));
+  url.searchParams.set('c', encodeCompositionCode(grid, key, state.musicBox.bpm, state.musicBox.effects));
   url.hash = '/';
   return url.toString();
 };

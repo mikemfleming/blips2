@@ -4,7 +4,7 @@ import { connect } from 'react-redux';
 import GridComponent from '../components/Grid';
 import { PAINT_CELLS, SELECT_ORGANISM, TOGGLE_CELL } from '../constants';
 
-const Grid = ({ grid, history, compositionHex, compositionLoadError, notes, currentColumn, playing, selectedOrganism, selectOrganism, toggleCell, paintCells }) => (
+const Grid = ({ grid, history, compositionHex, compositionLoadError, notes, currentColumn, playing, selectedOrganism, organismRotation, organismDrag, selectOrganism, toggleCell, paintCells }) => (
   <GridComponent
     grid={grid}
     history={history}
@@ -14,6 +14,8 @@ const Grid = ({ grid, history, compositionHex, compositionLoadError, notes, curr
     currentColumn={currentColumn}
     playing={playing}
     selectedOrganism={selectedOrganism}
+    organismRotation={organismRotation}
+    organismDrag={organismDrag}
     selectOrganism={selectOrganism}
     toggleCell={toggleCell}
     paintCells={paintCells}
@@ -29,6 +31,8 @@ const mapStateToProps = state => ({
   currentColumn: state.currentColumn,
   playing: Boolean(state.interval),
   selectedOrganism: state.selectedOrganism,
+  organismRotation: state.organismRotation,
+  organismDrag: state.organismDrag,
 });
 
 const mapDispatchToProps = dispatch => ({
