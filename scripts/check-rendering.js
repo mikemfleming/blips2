@@ -285,3 +285,31 @@ heldPreview.componentDidUpdate(beforeTurn);
 assert.equal(heldPreview.preview.length,3);
 assert(heldPreview.preview.every(cell=>cell.x===16),'Rotation must update a held preview without another pointer move');
 console.log('Passed: stationary pointer preview updates immediately on rotation.');
+
+// Two-finger navigation must not paint or toggle cells when either finger lifts.
+let touchToggles = 0;
+const touchGrid = new Grid({ grid: initial.grid, history: [], playing: false,
+  toggleCell: () => () => { touchToggles += 1; } });
+touchGrid.canvas = { setPointerCapture() {}, focus() {}, classList: { add() {}, remove() {}, toggle() {} } };
+touchGrid.cellAt = () => ({ x: 4, y: 4 });
+touchGrid.schedule = () => {};
+const touch = (pointerId, clientX, clientY, type = 'pointermove') => ({ pointerId, clientX, clientY, pointerType: 'touch', button: 0, type });
+touchGrid.beginDrag(touch(1, 100, 100, 'pointerdown'));
+touchGrid.beginDrag(touch(2, 200, 100, 'pointerdown'));
+const beforeTouch = { ...touchGrid.view };
+touchGrid.drag(touch(2, 240, 120));
+assert(touchGrid.view.zoom > beforeTouch.zoom, 'Spreading fingers zooms the sculpture');
+assert(touchGrid.view.yaw > beforeTouch.yaw, 'Moving the midpoint rotates the sculpture');
+assert.equal(touchGrid.gesture, null);
+assert.equal(touchGrid.pending.size, 0);
+touchGrid.endDrag(touch(2, 240, 120, 'pointerup'));
+const afterPinch = JSON.stringify(touchGrid.view);
+touchGrid.drag(touch(1, 110, 120));
+assert.equal(JSON.stringify(touchGrid.view), afterPinch, 'Remaining finger cannot draw or rotate accidentally');
+touchGrid.endDrag(touch(1, 110, 120, 'pointerup'));
+assert.equal(touchToggles, 0);
+assert.equal(touchGrid.touches.size, 0);
+touchGrid.beginDrag(touch(3, 100, 100, 'pointerdown'));
+touchGrid.endDrag(touch(3, 100, 100, 'pointerup'));
+assert.equal(touchToggles, 1, 'Single-finger taps work again after navigation');
+console.log('Passed: touch pinch zoom, two-finger rotation, no accidental edits, and gesture cleanup.');

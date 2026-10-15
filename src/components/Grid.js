@@ -12,6 +12,9 @@ class GridComponent extends React.Component {
     this.selected = null;
     this.preview = [];
     this.gesture = null;
+    this.touches = new Map();
+    this.touchView = null;
+    this.finishingTouchView = false;
     this.frame = null;
     this.keyboardCell = { x: 0, y: 0 };
     ['beginDrag','drag','endDrag','wheel','tick','resize','keyDown','contextLost','contextRestored','dragOver','drop','dragLeave'].forEach(name => {
@@ -20,6 +23,8 @@ class GridComponent extends React.Component {
   }
 
   componentDidMount() {
+    // Fit the whole board on narrow screens; pinch can then bring cells closer.
+    if (this.canvas.getBoundingClientRect().width <= 600) this.view.zoom = 1.25;
     this.initialize();
     const canvas = this.canvas;
     canvas.addEventListener('pointerdown', this.beginDrag);
@@ -164,6 +169,24 @@ class GridComponent extends React.Component {
   }
 
   beginDrag(event) {
+    if (event.pointerType === 'touch') {
+      this.touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      this.canvas.setPointerCapture(event.pointerId);
+      if (this.touches.size === 2) {
+        const [a, b] = Array.from(this.touches.values());
+        this.touchView = { distance: Math.max(1, Math.hypot(a.x-b.x, a.y-b.y)),
+          x: (a.x+b.x)/2, y: (a.y+b.y)/2, ...this.view };
+        this.gesture = null;
+        this.pending.clear();
+        this.preview = [];
+        this.selected = null;
+        this.canvas.classList.remove('editable');
+        this.canvas.classList.add('dragging');
+        this.schedule();
+        return;
+      }
+      if (this.touches.size > 1 || this.finishingTouchView) return;
+    }
     if (event.button !== 0 || this.gesture) return;
     if (!this.props.playing && this.props.selectedOrganism) {
       this.placeOrganism(this.cellAt(event.clientX,event.clientY));
@@ -179,6 +202,18 @@ class GridComponent extends React.Component {
   }
 
   drag(event) {
+    if (event.pointerType === 'touch' && this.touches.has(event.pointerId)) {
+      this.touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (this.touchView && this.touches.size >= 2) {
+        const [a, b] = Array.from(this.touches.values());
+        this.view.zoom = clamp(this.touchView.zoom * Math.hypot(a.x-b.x, a.y-b.y) / this.touchView.distance, .4, 3);
+        this.view.yaw = this.touchView.yaw + ((a.x+b.x)/2-this.touchView.x)*.008;
+        this.view.pitch = clamp(this.touchView.pitch + ((a.y+b.y)/2-this.touchView.y)*.008, .15, 1.4);
+        this.schedule();
+        return;
+      }
+      if (this.finishingTouchView) return;
+    }
     const gesture = this.gesture;
     if (!gesture) {
       this.selected = this.props.playing ? null : this.cellAt(event.clientX,event.clientY);
@@ -208,6 +243,17 @@ class GridComponent extends React.Component {
   }
 
   endDrag(event) {
+    if (this.touches.has(event.pointerId)) {
+      const navigating = this.touchView || this.finishingTouchView;
+      this.touches.delete(event.pointerId);
+      if (navigating) {
+        this.touchView = null;
+        this.finishingTouchView = this.touches.size > 0;
+        this.canvas.classList.remove('dragging', 'editable');
+        this.schedule();
+        return;
+      }
+    }
     const gesture=this.gesture;
     if (!gesture || gesture.pointerId!==event.pointerId) return;
     if (event.type==='pointerup') {
@@ -248,7 +294,8 @@ class GridComponent extends React.Component {
     return (
       <Sculpture>
         <div className="sculpture-caption">
-          <span>{this.props.selectedOrganism ? 'Place organism · R / Shift+R to rotate · Escape to cancel' : 'Drag squares to draw · Drag background to rotate · Scroll to zoom'}</span>
+          <span className="desktop-hint">{this.props.selectedOrganism ? 'Place organism · R / Shift+R to rotate · Escape to cancel' : 'Drag squares to draw · Drag background to rotate · Scroll to zoom'}</span>
+          <span className="touch-hint">{this.props.selectedOrganism ? 'Tap grid to place · Rotate in Organisms' : 'Drag cells to draw · Two fingers to rotate & pinch to zoom'}</span>
           <span className="iteration">Iteration {this.props.history.length+1}</span>
         </div>
         {this.state.error || this.props.compositionLoadError ? (
