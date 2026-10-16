@@ -61,6 +61,38 @@ const initialState = {
 
 const reducer = (state = initialState, action) => {
   switch (action.type) {
+    case 'STEP_NOTE_LAB': {
+      if (!state.noteLabOpen || (action.direction !== -1 && action.direction !== 1)) return state;
+      clearInterval(state.interval);
+      let grid = state.grid;
+      let history = state.history;
+      let column = state.currentColumn;
+      if (action.direction === 1) {
+        column += 1;
+        if (column === state.dimensions.columns) {
+          history = [...history, grid];
+          grid = Game.generateNewGrid(grid, state.dimensions, state.musicBox.keys[state.musicBox.currentKey]);
+          column = 0;
+        }
+      } else if (column > 0) {
+        column -= 1;
+      } else if (history.length) {
+        grid = history[history.length - 1];
+        history = history.slice(0, -1);
+        column = state.dimensions.columns - 1;
+      } else column = 0;
+      audio.configure(state.musicBox, grid, column);
+      const notes = columnNotes(grid, column, state.musicBox);
+      if (notes.length) synth.triggerAttackRelease(notes, Math.min(.2, 15 / state.musicBox.bpm));
+      return { ...state, grid, history, currentColumn: column, interval: null,
+        selectedOrganism: null, organismDrag: null,
+        compositionHex: state.compositionHex || encodeComposition(state.grid, state.musicBox.currentKey) };
+    }
+    case 'SET_NOTE_LAB_OPEN':
+      return { ...state, noteLabOpen: Boolean(action.open) };
+    case 'IMPORT_NOTE_MAPPING':
+      if (!validNotes(action.notes) || !Number.isInteger(action.maxNotes) || action.maxNotes < 1 || action.maxNotes > 16) return state;
+      return { ...state, musicBox: { ...state.musicBox, adminNotes: action.notes.slice(), adminNoteLimit: action.maxNotes } };
     case 'SET_ADMIN_NOTES':
       if (action.notes !== null && !validNotes(action.notes)) return state;
       return { ...state, musicBox: { ...state.musicBox, adminNotes: action.notes } };

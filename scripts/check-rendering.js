@@ -344,3 +344,109 @@ reducer({...limited,grid:dense,currentColumn:-1},{type:constants.STEP_GRID});
 assert.equal(lastPlayed.join(','),sounding.join(','),'Playback uses experimental mapping and limit');
 reducer(limited,{type:'AUDITION_ADMIN_NOTES',row:5});
 assert.equal(lastPlayed.join(','),experiment[5],'Row audition uses the edited pitch');
+
+// Label projection must agree with the grid picker across camera rotations.
+for (const yaw of [0, .7, 2, 4]) {
+  const view = {yaw, pitch:.65, zoom:1};
+  const projected = rendering.projectPoint([12.5, 17.5, 2], 800, 600, 32, 32, 2, view);
+  const hit = rendering.pickCell(projected.x,projected.y,rect,32,32,2,view);
+  assert.equal(hit.x,12);
+  assert.equal(hit.y,17);
+}
+const labelGrid = Array.from({length:32},()=>Array(32).fill(0));
+labelGrid[2][4] = 1;
+labelGrid[7][4] = 1;
+labelGrid[3][5] = 1;
+const labeledProps = {...component.props, grid:labelGrid, playing:true, currentColumn:4, noteLabOpen:true, notes:experiment};
+const markup = props => require('react-dom/server').renderToStaticMarkup(React.createElement(Grid,props));
+const labeledHtml = markup(labeledProps);
+assert.equal((labeledHtml.match(/<text /g)||[]).length,2,'Only occupied cubes in the playing column get labels');
+assert(labeledHtml.includes('Row 3, column 5: ' + experiment[2]));
+assert(labeledHtml.includes('Row 8, column 5: ' + experiment[7]));
+assert(!labeledHtml.includes('Y axis row notes'));
+assert(markup({...labeledProps,playing:false}).includes('Playing column cube notes'),'Paused steps retain labels');
+assert(!markup({...labeledProps,noteLabOpen:false}).includes('Playing column cube notes'));
+assert.equal((markup({...labeledProps,currentColumn:5}).match(/<text /g)||[]).length,1);
+assert.equal(reducer(initial,{type:'SET_NOTE_LAB_OPEN',open:true}).noteLabOpen,true);
+assert.equal(reducer(initial,{type:'SET_NOTE_LAB_OPEN',open:false}).noteLabOpen,false);
+console.log('Passed: cube-label projection, playing-column filtering, and lab visibility.');
+
+// Manual stepping uses the playback timeline and can return to the previous generation.
+let stepped = reducer({...painted,noteLabOpen:true}, {type:'STEP_NOTE_LAB',direction:1});
+assert.equal(stepped.currentColumn,0);
+assert.equal(stepped.interval,null);
+assert(stepped.compositionHex);
+const firstGrid = stepped.grid;
+for (let i=0; i<32; i++) stepped = reducer(stepped,{type:'STEP_NOTE_LAB',direction:1});
+assert.equal(stepped.currentColumn,0);
+assert.equal(stepped.history.length,1);
+const nextGeneration = stepped.grid;
+stepped = reducer(stepped,{type:'STEP_NOTE_LAB',direction:-1});
+assert.strictEqual(stepped.grid,firstGrid);
+assert.equal(stepped.currentColumn,31);
+assert.equal(stepped.history.length,0);
+stepped = reducer(stepped,{type:'STEP_NOTE_LAB',direction:1});
+assert.equal(JSON.stringify(stepped.grid),JSON.stringify(nextGeneration));
+const firstStep = reducer({...painted,noteLabOpen:true,currentColumn:0,interval:12},{type:'STEP_NOTE_LAB',direction:-1});
+assert.equal(firstStep.currentColumn,0);
+assert.equal(firstStep.interval,null);
+assert.strictEqual(reducer(initial,{type:'STEP_NOTE_LAB',direction:1}),initial);
+const NoteLab = load('src/components/NoteAdmin.js',{
+  react:React,'react-redux':{connect:()=>component=>component},'../music/arrangement':arrangement,'../music/chord':load('src/music/chord.js'),
+}).default;
+const directions=[];
+const lab = new NoteLab({step:direction=>directions.push(direction)});
+lab.state.open=true;
+const arrow = (key, extra={}) => ({key,target:{tagName:'BUTTON'},preventDefault(){this.prevented=true;},stopPropagation(){this.stopped=true;},...extra});
+const stepArrow = arrow('ArrowRight');
+lab.keyDown(stepArrow);
+assert(stepArrow.prevented && stepArrow.stopped);
+lab.keyDown(arrow('ArrowLeft'));
+lab.keyDown(arrow('ArrowRight',{target:{tagName:'SELECT'}}));
+lab.keyDown(arrow('ArrowRight',{target:{tagName:'TEXTAREA'}}));
+lab.keyDown(arrow('ArrowRight',{repeat:true}));
+lab.keyDown(arrow('ArrowRight',{metaKey:true}));
+lab.state.open=false;
+lab.keyDown(arrow('ArrowRight'));
+assert.equal(directions.join(','),'1,-1');
+console.log('Passed: manual timeline stepping, generation rewind, pause, labels, and keyboard guards.');
+
+const mappingJson = JSON.stringify({notes:experiment,maxNotes:5});
+const parsedMapping = arrangement.parseMapping(mappingJson);
+const importedMapping = reducer(mapped,{type:'IMPORT_NOTE_MAPPING',...parsedMapping});
+assert.equal(importedMapping.musicBox.adminNotes.join(','),experiment.join(','));
+assert.equal(importedMapping.musicBox.adminNoteLimit,5);
+assert.strictEqual(importedMapping.grid,mapped.grid);
+assert.strictEqual(importedMapping.history,mapped.history);
+assert.equal(importedMapping.currentColumn,mapped.currentColumn);
+for (const invalid of ['{', 'null', '{}', JSON.stringify({notes:experiment,maxNotes:0}), JSON.stringify({notes:experiment,maxNotes:17}), JSON.stringify({notes:experiment,maxNotes:2.5}), JSON.stringify({notes:experiment.slice(1),maxNotes:4}), JSON.stringify({notes:Array(32).fill('Q3'),maxNotes:4})]) {
+  assert.throws(()=>arrangement.parseMapping(invalid));
+}
+assert.strictEqual(reducer(importedMapping,{type:'IMPORT_NOTE_MAPPING',notes:experiment,maxNotes:0}),importedMapping);
+assert.strictEqual(reducer(importedMapping,{type:'IMPORT_NOTE_MAPPING',notes:['C4'],maxNotes:4}),importedMapping);
+const importedLab = new NoteLab({importMapping:mapping=>{assert.equal(mapping.maxNotes,5);}});
+importedLab.setState = update => { importedLab.state = {...importedLab.state,...update}; };
+importedLab.state.importText=mappingJson;
+importedLab.importMapping();
+assert.equal(importedLab.state.importStatus,'Mapping imported.');
+assert.equal(importedLab.state.importText,'');
+importedLab.state.importText='broken';
+importedLab.importMapping();
+assert(importedLab.state.importError);
+assert.equal(importedLab.state.importStatus,'');
+console.log('Passed: mapping import round trip, note limits, invalid JSON, atomic validation, and feedback.');
+
+const chords = load('src/music/chord.js');
+assert.equal(chords.bestFitChord([]).label,'Silence');
+assert.equal(chords.bestFitChord(['C3','C5']).label,'C');
+assert.equal(chords.bestFitChord(['C3','E4','G4','C5']).label,'C major');
+assert.equal(chords.bestFitChord(['E3','G4','C5']).label,'C major/E');
+assert.equal(chords.bestFitChord(['A3','C4','E4','G4']).label,'Am7');
+assert.equal(chords.bestFitChord(['C3','E4','G4','A4']).label,'C6');
+assert.equal(chords.bestFitChord(['C3','D4','G4']).label,'Csus2');
+assert.equal(chords.bestFitChord(['C3','E#4','G4']).label,'Csus4');
+assert.equal(chords.bestFitChord(['Bb3','D4','F4']).label,'B♭ major');
+assert(chords.bestFitChord(['C3','C#4','D4','F#4']).approximate);
+const chordLimited = {...initial.musicBox,adminNotes:Array(32).fill('G4'),adminNoteLimit:1};
+assert.equal(chords.bestFitChord(arrangement.columnNotes(dense,0,chordLimited)).label,'G');
+console.log('Passed: chord names, inversions, octave duplicates, enharmonics, best fits, silence, and note limits.');

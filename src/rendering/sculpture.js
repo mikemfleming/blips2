@@ -7,6 +7,19 @@ export const cameraFor = (rows, columns, height, view) => ({
   yaw: view.yaw, pitch: view.pitch, zoom: view.zoom,
 });
 
+// Match the WebGL camera so HTML/SVG annotations stay attached to world coordinates.
+export const projectPoint = (point, width, height, rows, columns, layers, view) => {
+  const camera = cameraFor(rows, columns, layers, view);
+  const [x, y, z] = point.map((value, i) => value - camera.center[i]);
+  const across = x * Math.cos(view.yaw) - y * Math.sin(view.yaw);
+  const forward = x * Math.sin(view.yaw) + y * Math.cos(view.yaw);
+  const vertical = forward * Math.sin(view.pitch) - z * Math.cos(view.pitch);
+  const depth = forward * Math.cos(view.pitch) + z * Math.sin(view.pitch);
+  const distance = camera.radius * 3;
+  const scale = .36 * view.zoom / camera.radius * distance / (distance - depth) * Math.min(width, height);
+  return { x: width / 2 + across * scale, y: height / 2 + vertical * scale };
+};
+
 // Intersect a camera ray with the editable top plane instead of querying DOM faces.
 export const pickCell = (clientX, clientY, rect, rows, columns, height, view, planeHeight = height) => {
   const camera = cameraFor(rows, columns, height, view);

@@ -12,6 +12,20 @@ export const DEFAULT_EXPERIMENT = { palette: 'majorPentatonic', root: 0, octave:
 export const noteName = midi => PITCHES[midi % 12] + (Math.floor(midi / 12) - 1);
 export const validNotes = notes => Array.isArray(notes) && notes.length === 32
   && notes.every(note => typeof note === 'string' && /^[A-G](#|b)?[1-7]$/.test(note));
+export const parseMapping = text => {
+  let value;
+  try {
+    if (typeof text !== 'string' || text.length > 16384) throw new Error();
+    value = JSON.parse(text);
+  } catch (error) {
+    throw new Error('Paste valid mapping JSON.');
+  }
+  if (!value || !validNotes(value.notes)) throw new Error('Include exactly 32 notes, using A–G, optional # or b, and octaves 1–7.');
+  if (!Number.isInteger(value.maxNotes) || value.maxNotes < 1 || value.maxNotes > 16) {
+    throw new Error('maxNotes must be a whole number from 1 to 16.');
+  }
+  return { notes: value.notes.slice(), maxNotes: value.maxNotes };
+};
 export const makeArrangement = ({ palette, root, octave, octaves, order }) => {
   const intervals = PALETTES[palette].intervals;
   let pool = [];

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Sculpture } from '../styles';
 import { organismAt, ORGANISMS } from '../organisms';
-import SculptureRenderer, { INITIAL_VIEW, clamp, pickCell } from '../rendering/sculpture';
+import SculptureRenderer, { INITIAL_VIEW, clamp, pickCell, projectPoint } from '../rendering/sculpture';
 
 class GridComponent extends React.Component {
   constructor(props) {
@@ -9,6 +9,7 @@ class GridComponent extends React.Component {
     this.state = { error: null };
     this.view = { ...INITIAL_VIEW };
     this.pending = new Map();
+    this.noteLabels = [];
     this.selected = null;
     this.preview = [];
     this.gesture = null;
@@ -107,9 +108,24 @@ class GridComponent extends React.Component {
       this.pending.clear();
       this.props.paintCells(cells);
     }
-    this.renderer.draw(this.view, this.props.currentColumn, this.props.playing, this.selected, time, this.props.playing ? [] : this.preview);
+    this.renderer.draw(this.view, this.props.currentColumn, (this.props.playing || (this.props.noteLabOpen && this.props.currentColumn >= 0)), this.selected, time, this.props.playing ? [] : this.preview);
+    this.positionNoteLabels();
     // Only playback animation needs continuous frames. Edits and camera changes request one.
     if (this.props.playing) this.schedule();
+  }
+
+  positionNoteLabels() {
+    if (!this.props.noteLabOpen || !this.noteOverlay || this.props.currentColumn < 0) return;
+    const { grid, history, currentColumn } = this.props;
+    const rect = this.canvas.getBoundingClientRect();
+    this.noteOverlay.setAttribute('viewBox', `0 0 ${rect.width} ${rect.height}`);
+    this.noteLabels.forEach((label, y) => {
+      if (!label) return;
+      const point = projectPoint([currentColumn + .5, y + .5, history.length + 1],
+        rect.width, rect.height, grid.length, grid[0].length, history.length + 1, this.view);
+      label.setAttribute('x', point.x);
+      label.setAttribute('y', point.y);
+    });
   }
 
   cellAt(x, y) {
@@ -300,6 +316,16 @@ class GridComponent extends React.Component {
         </div>
         {this.state.error || this.props.compositionLoadError ? (
           <p role="alert">{this.state.error || this.props.compositionLoadError}</p>
+        ) : null}
+        {this.props.noteLabOpen && this.props.currentColumn >= 0 ? (
+          <svg className="playing-note-labels" ref={element => { this.noteOverlay = element; }} role="img" aria-label="Playing column cube notes">
+            {this.props.notes.map((note, y) => this.props.grid[y][this.props.currentColumn] ? (
+              <text key={y} textAnchor="middle" dominantBaseline="central"
+                ref={element => { this.noteLabels[y] = element; }}>
+                {note}<title>Row {y + 1}, column {this.props.currentColumn + 1}: {note}</title>
+              </text>
+            ) : null)}
+          </svg>
         ) : null}
         <canvas
           ref={element=>{this.canvas=element;}}

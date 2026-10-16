@@ -93,4 +93,5 @@ Settings apply on the next playback step. Audition individual rows or the curren
 column, and limit distinct pitches to compare sparse and dense voicings (the first
 occupied rows take priority). **Restore original** returns to the normal major/minor
 mapping. Experiments last for the current session and are not included in song
-links; select the export field to copy the mapping and note limit for reference.
+links; select the export field to copy the mapping and note limit. Under Advanced, paste
+that JSON into Import mapping to restore it in another session.

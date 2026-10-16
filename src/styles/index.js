@@ -193,8 +193,24 @@ export const ControlsContainer = styled.div`
   .admin-fields { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; }
   .note-admin label { display: block; font-size: .75rem; min-width: 0; }
   .note-admin select, .note-admin textarea { display: block; width: 100%; box-sizing: border-box; margin-top: .3rem; padding: .4rem; border: 1px solid #ccc; border-radius: .3rem; background: white; color: #222; font: inherit; }
-  .admin-actions { display: flex; flex-wrap: wrap; gap: .35rem; margin: .75rem 0; }
-  .admin-actions button { font-size: .75rem; background: #eee; padding: .4rem; }
+  .lab-transport { display: flex; align-items: center; gap: .4rem; margin-top: .6rem; padding: .45rem; background: #eee; border-radius: .5rem; }
+  .lab-transport button { border-radius: .3rem; min-width: 2rem; background: white; }
+  .lab-chord { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; padding: .65rem .4rem .2rem; }
+  .lab-chord > span { font-size: .7rem; color: #777; }
+  .lab-chord strong { font-size: 1rem; font-weight: 600; color: #702aae; }
+  .lab-position { flex: 1; text-align: center; font-size: .8rem; font-variant-numeric: tabular-nums; }
+  .lab-position small { display: block; color: #777; font-size: .65rem; margin-top: .2rem; }
+  .note-admin .lab-hint { margin: .5rem 0 1rem; font-size: .7rem; color: #777; }
+  .lab-wide { grid-column: 1 / -1; }
+  .lab-footer { display: flex; align-items: center; justify-content: space-between; margin: .65rem 0; gap: .5rem; }
+  .lab-state { font-size: .7rem; color: #777; }
+  .lab-footer button.lab-reset, .lab-row-heading button { font-size: .7rem; color: #702aae; padding: .3rem; }
+  .lab-advanced { border-top: 1px solid #ddd; padding-top: .7rem; }
+  .lab-advanced summary { cursor: pointer; font-size: .8rem; color: #555; padding: .3rem 0; }
+  .lab-advanced summary:focus-visible { outline: 2px solid #9d40d7; outline-offset: 3px; }
+  .lab-advanced[open] > .admin-fields { margin-top: .8rem; }
+  .lab-row-heading { display: flex; align-items: center; justify-content: space-between; margin: 1rem 0 .5rem; font-size: .75rem; font-weight: 600; }
+  .note-admin .lab-session { margin: .8rem 0 .15rem; font-size: .65rem; color: #888; }
   .admin-rows { display: grid; grid-template-columns: 1fr 1fr; gap: .3rem .7rem; }
   .admin-rows label { display: flex; align-items: center; gap: .3rem; }
   .admin-rows label > span { width: 1.3rem; flex-shrink: 0; color: #777; }
@@ -202,6 +218,9 @@ export const ControlsContainer = styled.div`
   .admin-rows button { padding: .25rem; min-width: 1.8rem; }
   .admin-export { margin-top: .75rem; }
   .admin-export textarea { min-height: 5rem; resize: vertical; }
+  .note-admin button.lab-import { margin-top: .5rem; padding: .4rem .6rem; background: #eee; border-radius: .3rem; font-size: .75rem; }
+  .note-admin p.lab-import-error { position: static; color: #a12828; font-size: .75rem; }
+
   .mobile-sound-tools { display: none; }
   @media (max-width: 600px), (max-height: 500px) and (max-width: 960px) {
     width: 100%; display: grid; grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem;
@@ -282,6 +301,9 @@ export const Sculpture = styled.div`
   canvas:focus-visible { outline: 2px solid #9d40d7; outline-offset: -2px; }
   canvas.editable { cursor: crosshair; }
   canvas.dragging { cursor: grabbing; }
+  .playing-note-labels { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; }
+  .playing-note-labels text { fill: #222; font: 11px system-ui, sans-serif; paint-order: stroke; stroke: #fafafa; stroke-width: 3px; stroke-linejoin: round; }
+
 `;
 
 export const ModalBackdrop = styled.div`

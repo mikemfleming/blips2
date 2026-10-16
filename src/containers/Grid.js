@@ -2,15 +2,17 @@ import React from 'react';
 import { connect } from 'react-redux';
 
 import GridComponent from '../components/Grid';
+import { rowNotes } from '../music/arrangement';
 import { PAINT_CELLS, SELECT_ORGANISM, TOGGLE_CELL } from '../constants';
 
-const Grid = ({ grid, history, compositionHex, compositionLoadError, notes, currentColumn, playing, selectedOrganism, organismRotation, organismDrag, selectOrganism, toggleCell, paintCells }) => (
+const Grid = ({ grid, history, compositionHex, compositionLoadError, notes, noteLabOpen, currentColumn, playing, selectedOrganism, organismRotation, organismDrag, selectOrganism, toggleCell, paintCells }) => (
   <GridComponent
     grid={grid}
     history={history}
     compositionHex={compositionHex}
     compositionLoadError={compositionLoadError}
     notes={notes}
+    noteLabOpen={noteLabOpen}
     currentColumn={currentColumn}
     playing={playing}
     selectedOrganism={selectedOrganism}
@@ -27,7 +29,8 @@ const mapStateToProps = state => ({
   history: state.history,
   compositionHex: state.compositionHex,
   compositionLoadError: state.compositionLoadError,
-  notes: state.musicBox.keys[state.musicBox.currentKey],
+  notes: rowNotes(state.musicBox),
+  noteLabOpen: Boolean(state.noteLabOpen),
   currentColumn: state.currentColumn,
   playing: Boolean(state.interval),
   selectedOrganism: state.selectedOrganism,
