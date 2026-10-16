@@ -27,6 +27,7 @@ import {
 import StartAudioContext from 'startaudiocontext';
 import Tone from 'tone';
 import { createAudio } from '../audio';
+import { columnNotes, validNotes } from '../music/arrangement';
 const audio = createAudio(Tone);
 const { synth, volume } = audio;
 StartAudioContext(synth.context, '#root')
@@ -60,6 +61,20 @@ const initialState = {
 
 const reducer = (state = initialState, action) => {
   switch (action.type) {
+    case 'SET_ADMIN_NOTES':
+      if (action.notes !== null && !validNotes(action.notes)) return state;
+      return { ...state, musicBox: { ...state.musicBox, adminNotes: action.notes } };
+    case 'SET_ADMIN_NOTE_LIMIT':
+      if (!Number.isInteger(action.limit) || action.limit < 1 || action.limit > 16) return state;
+      return { ...state, musicBox: { ...state.musicBox, adminNoteLimit: action.limit } };
+    case 'AUDITION_ADMIN_NOTES': {
+      const notes = action.row === undefined
+        ? columnNotes(state.grid, Math.max(0, state.currentColumn), state.musicBox)
+        : Number.isInteger(action.row) && action.row >= 0 && action.row < 32
+          ? [state.musicBox.adminNotes && state.musicBox.adminNotes[action.row]] : [];
+      if (notes.length && notes.every(Boolean)) synth.triggerAttackRelease(notes, .3);
+      return state;
+    }
     case TOGGLE_EFFECT: {
       const bit = EFFECT_FLAGS[action.effect];
       if (!bit) return state;
@@ -126,14 +141,7 @@ const reducer = (state = initialState, action) => {
       const nextGrid = completedIteration
         ? Game.generateNewGrid(state.grid, state.dimensions, state.musicBox.keys[state.musicBox.currentKey])
         : state.grid;
-      const notes = nextGrid.map((row, y) => {
-        const key = state.musicBox.keys[state.musicBox.currentKey];
-        return {
-          active: row[nextColumn],
-          note: key[y % key.length],
-        };
-      }).filter(blip => blip.active)
-      .map(blip => blip.note);
+      const notes = columnNotes(nextGrid, nextColumn, state.musicBox);
 
       audio.configure(state.musicBox, nextGrid, nextColumn);
       synth.triggerAttackRelease(notes, Math.min(0.2, 15 / state.musicBox.bpm));

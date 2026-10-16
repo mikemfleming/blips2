@@ -13,6 +13,7 @@ const load = (path, dependencies = {}, globals = {}) => {
 };
 const rendering = load('src/rendering/sculpture.js');
 const constants = load('src/constants/index.js');
+const arrangement = load('src/music/arrangement.js');
 const organisms = load('src/organisms/index.js');
 const composition = load('src/composition/index.js');
 const rect = {left:0,top:0,width:800,height:600};
@@ -73,11 +74,12 @@ class AudioNode {
   chain(...args){chain=args;} connect(){} disconnect(){} dispose(){this.disposed=true;}
   setPosition(...position){this.position=position;}
 }
-class Synth extends AudioNode {triggerAttackRelease(){}}
+let lastPlayed;
+class Synth extends AudioNode {triggerAttackRelease(notes){lastPlayed=Array.from(notes);}}
 class Delay extends AudioNode {}
 const fakeTone={PolySynth:Synth,FeedbackDelay:Delay,Volume:AudioNode,Synth,Master:{},Panner3D:AudioNode,Filter:AudioNode,Chorus:AudioNode,Phaser:AudioNode,PingPongDelay:AudioNode};
 const reducer=load('src/reducers/index.js', {
-  '../constants':constants, '../game':require('../src/game'), '../composition':composition, '../audio':audioModule,
+  '../constants':constants, '../game':require('../src/game'), '../composition':composition, '../audio':audioModule, '../music/arrangement':arrangement,
   tone:fakeTone,
   startaudiocontext:()=>Promise.resolve(),
 }, {clearInterval:()=>null}).default;
@@ -313,3 +315,32 @@ touchGrid.beginDrag(touch(3, 100, 100, 'pointerdown'));
 touchGrid.endDrag(touch(3, 100, 100, 'pointerup'));
 assert.equal(touchToggles, 1, 'Single-finger taps work again after navigation');
 console.log('Passed: touch pinch zoom, two-finger rotation, no accidental edits, and gesture cleanup.');
+
+// Experiments must preserve legacy songs and constrain dense columns.
+const originalMapping = arrangement.rowNotes(initial.musicBox);
+assert.equal(originalMapping[0], 'C6');
+assert.equal(originalMapping[16], 'C6');
+for (const palette of Object.keys(arrangement.PALETTES)) {
+  for (const order of ['ascending','descending','wave','thirds']) {
+    const notes = arrangement.makeArrangement({...arrangement.DEFAULT_EXPERIMENT,palette,order});
+    assert(arrangement.validNotes(notes));
+  }
+}
+const experiment = arrangement.makeArrangement(arrangement.DEFAULT_EXPERIMENT);
+const mapped = reducer(initial,{type:'SET_ADMIN_NOTES',notes:experiment});
+assert.equal(arrangement.rowNotes(mapped.musicBox).join(','),experiment.join(','));
+assert.strictEqual(reducer(mapped,{type:'SET_ADMIN_NOTES',notes:['invalid']}),mapped);
+const limited = reducer(mapped,{type:'SET_ADMIN_NOTE_LIMIT',limit:3});
+const dense = Array.from({length:32},()=>[1]);
+const sounding = arrangement.columnNotes(dense,0,limited.musicBox);
+assert.equal(sounding.length,3);
+assert.equal(new Set(sounding).size,3);
+const restored = reducer(limited,{type:'SET_ADMIN_NOTES',notes:null});
+assert.equal(arrangement.rowNotes(restored.musicBox).join(','),originalMapping.join(','));
+assert.equal(arrangement.columnNotes(dense,0,restored.musicBox).length,32);
+console.log('Passed: experimental presets, row overrides, validation, voice limits, and restoration.');
+
+reducer({...limited,grid:dense,currentColumn:-1},{type:constants.STEP_GRID});
+assert.equal(lastPlayed.join(','),sounding.join(','),'Playback uses experimental mapping and limit');
+reducer(limited,{type:'AUDITION_ADMIN_NOTES',row:5});
+assert.equal(lastPlayed.join(','),experiment[5],'Row audition uses the edited pitch');

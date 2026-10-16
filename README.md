@@ -85,3 +85,12 @@ pattern dimensions. Rotation shortcuts ignore text inputs and playback.
 Organism dragging uses pointer capture rather than native HTML drag-and-drop,
 so R and Shift+R remain available while holding a pattern over the grid. The
 preview rotates immediately, release places it, and Escape cancels the drag.
+
+
+Open **Sound → Note lab** to experiment with row pitches. Choose a palette,
+root, octave span and row order, or override any of the 32 rows individually.
+Settings apply on the next playback step. Audition individual rows or the current
+column, and limit distinct pitches to compare sparse and dense voicings (the first
+occupied rows take priority). **Restore original** returns to the normal major/minor
+mapping. Experiments last for the current session and are not included in song
+links; select the export field to copy the mapping and note limit for reference.

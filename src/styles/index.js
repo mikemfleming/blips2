@@ -187,6 +187,21 @@ export const ControlsContainer = styled.div`
   .effect-switch > span { display: block; width: .75rem; height: .75rem; border-radius: 50%; background: white; transition: transform .15s; }
   .effect-switch.on { background: #9d40d7; }
   .effect-switch.on > span { transform: translateX(.8rem); }
+  .note-admin { border-top: 1px solid #ddd; margin-top: .75rem; padding-top: .5rem; }
+  button.admin-toggle { width: 100%; justify-content: space-between; font-size: .85rem; color: #702aae; }
+  .note-admin p { font-size: .75rem; line-height: 1.5; color: #666; }
+  .admin-fields { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; }
+  .note-admin label { display: block; font-size: .75rem; min-width: 0; }
+  .note-admin select, .note-admin textarea { display: block; width: 100%; box-sizing: border-box; margin-top: .3rem; padding: .4rem; border: 1px solid #ccc; border-radius: .3rem; background: white; color: #222; font: inherit; }
+  .admin-actions { display: flex; flex-wrap: wrap; gap: .35rem; margin: .75rem 0; }
+  .admin-actions button { font-size: .75rem; background: #eee; padding: .4rem; }
+  .admin-rows { display: grid; grid-template-columns: 1fr 1fr; gap: .3rem .7rem; }
+  .admin-rows label { display: flex; align-items: center; gap: .3rem; }
+  .admin-rows label > span { width: 1.3rem; flex-shrink: 0; color: #777; }
+  .admin-rows select { margin: 0; min-width: 0; }
+  .admin-rows button { padding: .25rem; min-width: 1.8rem; }
+  .admin-export { margin-top: .75rem; }
+  .admin-export textarea { min-height: 5rem; resize: vertical; }
   .mobile-sound-tools { display: none; }
   @media (max-width: 600px), (max-height: 500px) and (max-width: 960px) {
     width: 100%; display: grid; grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem;
